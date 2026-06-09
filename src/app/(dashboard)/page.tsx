@@ -1,10 +1,9 @@
-import { getServerSession } from 'next-auth'
-import { authConfig } from '@/lib/auth/config'
+import { auth } from '@/auth'
 import { prisma } from '@/lib/db/prisma'
 import { ProjectsGrid } from '@/components/dashboard/ProjectsGrid'
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authConfig)
+  const session = await auth()
   const projects = await prisma.project.findMany({
     where: { userId: session!.user.id },
     orderBy: { updatedAt: 'desc' },

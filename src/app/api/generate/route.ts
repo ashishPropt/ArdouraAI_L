@@ -1,12 +1,11 @@
 import { NextRequest } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authConfig } from '@/lib/auth/config'
+import { auth } from '@/auth'
 import { prisma } from '@/lib/db/prisma'
 import { generateProject } from '@/lib/codegen/generator'
 import type { LLMMessage } from '@/lib/llm/providers/anthropic'
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authConfig)
+  const session = await auth()
   if (!session?.user?.id) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
@@ -40,7 +39,6 @@ export async function POST(req: NextRequest) {
 
         send({ type: 'status', message: 'Saving generated files...' })
 
-        // Upsert all files
         for (const file of generated.files) {
           await prisma.projectFile.upsert({
             where: { projectId_path: { projectId, path: file.path } },
@@ -49,7 +47,6 @@ export async function POST(req: NextRequest) {
           })
         }
 
-        // Update project name if generated
         await prisma.project.update({
           where: { id: projectId },
           data: { name: generated.projectName || project.name, description: generated.description },
@@ -72,10 +69,6 @@ export async function POST(req: NextRequest) {
   })
 
   return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    },
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
   })
 }

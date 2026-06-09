@@ -1,13 +1,12 @@
 import { NextRequest } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authConfig } from '@/lib/auth/config'
+import { auth } from '@/auth'
 import { prisma } from '@/lib/db/prisma'
 import { routedStream } from '@/lib/llm/router'
 import { SYSTEM_PROMPT_CHAT } from '@/lib/codegen/prompts'
 import type { LLMMessage } from '@/lib/llm/providers/anthropic'
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authConfig)
+  const session = await auth()
   if (!session?.user?.id) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
   }
@@ -23,39 +22,25 @@ export async function POST(req: NextRequest) {
   })
   if (!project) return new Response(JSON.stringify({ error: 'Project not found' }), { status: 404 })
 
-  // Save user message
-  await prisma.message.create({
-    data: { projectId, role: 'USER', content: message },
-  })
+  await prisma.message.create({ data: { projectId, role: 'USER', content: message } })
 
-  // Build conversation history
   const history: LLMMessage[] = project.messages.map((m) => ({
     role: m.role === 'USER' ? 'user' : 'assistant',
     content: m.content,
   }))
   history.push({ role: 'user', content: message })
 
-  // Stream response
   const encoder = new TextEncoder()
-  let fullResponse = ''
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const { text, model } = await routedStream(
-          history,
-          SYSTEM_PROMPT_CHAT,
-          'medium',
-          (chunk) => {
-            fullResponse += chunk
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'chunk', text: chunk })}\n\n`))
-          }
-        )
+        const { text, model } = await routedStream(history, SYSTEM_PROMPT_CHAT, 'medium', (chunk) => {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'chunk', text: chunk })}\n\n`))
+        })
 
-        // Check if generation was triggered
         const shouldGenerate = text.includes('##GENERATE##')
 
-        // Save assistant message
         await prisma.message.create({
           data: {
             projectId,
@@ -69,7 +54,7 @@ export async function POST(req: NextRequest) {
           encoder.encode(`data: ${JSON.stringify({ type: 'done', shouldGenerate, model })}\n\n`)
         )
       } catch (err) {
-        console.error('Chat stream error:', err)
+        console.error('Chat error:', err)
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ type: 'error', message: 'Generation failed' })}\n\n`)
         )
@@ -80,10 +65,6 @@ export async function POST(req: NextRequest) {
   })
 
   return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    },
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
   })
 }

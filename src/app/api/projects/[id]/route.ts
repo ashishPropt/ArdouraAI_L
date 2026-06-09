@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authConfig } from '@/lib/auth/config'
+import { auth } from '@/auth'
 import { prisma } from '@/lib/db/prisma'
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authConfig)
+export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+  const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const project = await prisma.project.findFirst({
@@ -20,7 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authConfig)
+  const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
@@ -32,8 +31,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json(project)
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authConfig)
+export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+  const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   await prisma.project.deleteMany({ where: { id: params.id, userId: session.user.id } })

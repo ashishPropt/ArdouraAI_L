@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authConfig } from '@/lib/auth/config'
+import { auth } from '@/auth'
 import { prisma } from '@/lib/db/prisma'
-import { createInstance, getInstance, validateApiKey, getAccount } from '@/lib/vultr/client'
+import { createInstance, validateApiKey, getAccount } from '@/lib/vultr/client'
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authConfig)
+  const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { projectId, plan, region, vultrApiKey: customKey } = await req.json()
@@ -17,7 +16,6 @@ export async function POST(req: NextRequest) {
 
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 })
 
-  // Determine which API key to use: user's own > owner's default
   const apiKey = customKey || user?.vultrApiKey || process.env.VULTR_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'No Vultr API key configured' }, { status: 400 })
 
@@ -26,12 +24,7 @@ export async function POST(req: NextRequest) {
 
     await prisma.project.update({
       where: { id: projectId },
-      data: {
-        vultrInstanceId: instance.id,
-        vultrIp: instance.ip,
-        status: 'DEPLOYED',
-        deployedUrl: `http://${instance.ip}`,
-      },
+      data: { vultrInstanceId: instance.id, vultrIp: instance.ip, status: 'DEPLOYED', deployedUrl: `http://${instance.ip}` },
     })
 
     return NextResponse.json({
@@ -51,7 +44,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authConfig)
+  const session = await auth()
   if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
