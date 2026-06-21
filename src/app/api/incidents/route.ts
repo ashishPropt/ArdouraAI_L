@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     include: {
       healActions: {
         select: { id: true, title: true, status: true, riskLevel: true },
-        orderBy: { startedAt: 'desc' },
+        orderBy: { createdAt: 'desc' },
         take: 5,
       },
     },
