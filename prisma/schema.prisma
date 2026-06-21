@@ -99,6 +99,7 @@ model Project {
   dbConnections DatabaseConnection[]
   workflows    Workflow[]
   activityLogs ActivityLog[]
+  insights     Insight[]
 
   @@index([userId])
 }
@@ -522,6 +523,32 @@ model WorkflowRunLog {
   run  WorkflowRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
   step WorkflowStep? @relation(fields: [stepId], references: [id])
   @@index([runId])
+}
+
+// ─────────────────────────────────────────────
+// AI INSIGHTS
+// ─────────────────────────────────────────────
+
+enum InsightType {
+  POSTMORTEM
+  CODE_REVIEW
+  ADVISOR
+  COST_ANALYSIS
+}
+
+model Insight {
+  id        String      @id @default(cuid())
+  projectId String
+  userId    String
+  type      InsightType
+  title     String
+  content   String      @db.Text
+  metadata  Json?
+  createdAt DateTime    @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@index([projectId, type])
+  @@index([userId, createdAt])
 }
 
 // ─────────────────────────────────────────────
