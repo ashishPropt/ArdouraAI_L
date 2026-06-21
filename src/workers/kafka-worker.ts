@@ -15,11 +15,13 @@ import { createConsumer } from '@/lib/kafka/consumer'
 import { ALL_TOPICS } from '@/lib/kafka/topics'
 import type { ArdouraEvent } from '@/lib/kafka/events'
 import { processEventWithRules } from '@/lib/rules/actions'
+import { executeWorkflow } from '@/lib/workflows/executor'
 
 const WORKER_GROUP = 'ardoura-sre-worker'
 const DB_POLL_INTERVAL_MS = 5000
 const DB_BATCH_SIZE = 50
-const MONITOR_POLL_INTERVAL_MS = 60_000  // 1 minute
+const MONITOR_POLL_INTERVAL_MS = 60_000   // 1 minute
+const CRON_POLL_INTERVAL_MS   = 60_000   // check cron workflows every minute
 
 // Track consecutive failures per monitor to avoid noisy incident creation
 const failureStreak: Record<string, number> = {}
@@ -190,6 +192,56 @@ function startMonitorPoller() {
   setInterval(pollMonitors, MONITOR_POLL_INTERVAL_MS)
 }
 
+// ── Cron workflow scheduler ───────────────────────────────────────────────────
+
+function parseCronField(field: string, value: number): boolean {
+  if (field === '*') return true
+  if (field.includes('/')) {
+    const [, step] = field.split('/')
+    return value % Number(step) === 0
+  }
+  return field.split(',').includes(String(value))
+}
+
+function cronMatches(expr: string, now: Date): boolean {
+  const parts = expr.trim().split(/\s+/)
+  if (parts.length !== 5) return false
+  const [min, hour, dom, , dow] = parts
+  return (
+    parseCronField(min,  now.getMinutes()) &&
+    parseCronField(hour, now.getHours()) &&
+    parseCronField(dom,  now.getDate()) &&
+    parseCronField(dow,  now.getDay())
+  )
+}
+
+async function pollCronWorkflows() {
+  try {
+    const workflows = await prisma.workflow.findMany({
+      where: { trigger: 'CRON', active: true, cronExpr: { not: null } },
+    })
+    const now = new Date()
+    for (const wf of workflows) {
+      if (!wf.cronExpr) continue
+      if (!cronMatches(wf.cronExpr, now)) continue
+      // Avoid double-firing within the same minute
+      if (wf.lastRunAt && now.getTime() - new Date(wf.lastRunAt).getTime() < 55_000) continue
+      console.log(`[Cron] Triggering workflow "${wf.name}" (${wf.id})`)
+      executeWorkflow(wf.id, 'cron').catch(err =>
+        console.error(`[Cron] Workflow ${wf.id} failed:`, err)
+      )
+    }
+  } catch (err) {
+    console.error('[Cron] Poll error:', err)
+  }
+}
+
+function startCronScheduler() {
+  console.log('[Cron] Scheduler started — interval:', CRON_POLL_INTERVAL_MS / 1000, 's')
+  pollCronWorkflows()
+  setInterval(pollCronWorkflows, CRON_POLL_INTERVAL_MS)
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 async function main() {
@@ -197,6 +249,7 @@ async function main() {
 
   // Always start monitor poller regardless of Kafka mode
   startMonitorPoller()
+  startCronScheduler()
 
   if (isKafkaEnabled()) {
     await runKafkaWorker()

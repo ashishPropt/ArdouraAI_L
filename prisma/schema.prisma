@@ -32,6 +32,7 @@ model User {
   tokenBudgets  TokenBudget[]
   cloudInstances CloudInstance[]
   rules         Rule[]
+  activityLogs  ActivityLog[]
 }
 
 model Account {
@@ -93,6 +94,8 @@ model Project {
   llmUsageLogs LLMUsageLog[]
   monitors     Monitor[]
   dbConnections DatabaseConnection[]
+  workflows    Workflow[]
+  activityLogs ActivityLog[]
 
   @@index([userId])
 }
@@ -424,4 +427,116 @@ enum IntegrationType {
   DATABASE
   VULTR
   EMAIL
+}
+
+// ─────────────────────────────────────────────
+// WORKFLOW AUTOMATION
+// ─────────────────────────────────────────────
+
+enum WorkflowTrigger {
+  MANUAL
+  CRON
+  WEBHOOK
+  INCIDENT
+}
+
+enum WorkflowStepType {
+  LLM_GENERATE
+  HTTP_REQUEST
+  CONDITION
+  NOTIFY
+  TRANSFORM
+}
+
+enum WorkflowRunStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Workflow {
+  id            String          @id @default(cuid())
+  projectId     String
+  name          String
+  description   String?
+  trigger       WorkflowTrigger @default(MANUAL)
+  cronExpr      String?
+  webhookSecret String?
+  active        Boolean         @default(true)
+  lastRunAt     DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  steps   WorkflowStep[]
+  runs    WorkflowRun[]
+  @@index([projectId])
+  @@index([trigger, active])
+}
+
+model WorkflowStep {
+  id         String           @id @default(cuid())
+  workflowId String
+  name       String
+  stepOrder  Int
+  type       WorkflowStepType
+  config     Json             @default("{}")
+
+  workflow Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  logs     WorkflowRunLog[]
+  @@index([workflowId])
+}
+
+model WorkflowRun {
+  id          String            @id @default(cuid())
+  workflowId  String
+  status      WorkflowRunStatus @default(RUNNING)
+  triggeredBy String?
+  input       Json?
+  output      Json?
+  error       String?           @db.Text
+  startedAt   DateTime          @default(now())
+  completedAt DateTime?
+
+  workflow Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  logs     WorkflowRunLog[]
+  @@index([workflowId, startedAt])
+}
+
+model WorkflowRunLog {
+  id         String   @id @default(cuid())
+  runId      String
+  stepId     String?
+  stepName   String?
+  status     String
+  input      Json?
+  output     Json?
+  error      String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  run  WorkflowRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  step WorkflowStep? @relation(fields: [stepId], references: [id])
+  @@index([runId])
+}
+
+// ─────────────────────────────────────────────
+// ACTIVITY LOG
+// ─────────────────────────────────────────────
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  projectId String?
+  action    String   // e.g. "project.created", "file.edited", "incident.resolved"
+  entity    String?
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  @@index([projectId, createdAt])
+  @@index([userId, createdAt])
 }
