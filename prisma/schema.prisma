@@ -100,6 +100,8 @@ model Project {
   workflows    Workflow[]
   activityLogs ActivityLog[]
   insights     Insight[]
+  secrets      ProjectSecret[]
+  environments ProjectEnvironment[]
 
   @@index([userId])
 }
@@ -523,6 +525,47 @@ model WorkflowRunLog {
   run  WorkflowRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
   step WorkflowStep? @relation(fields: [stepId], references: [id])
   @@index([runId])
+}
+
+// ─────────────────────────────────────────────
+// SECRET MANAGER + ENVIRONMENTS
+// ─────────────────────────────────────────────
+
+enum EnvType {
+  DEVELOPMENT
+  STAGING
+  PRODUCTION
+}
+
+model ProjectSecret {
+  id          String   @id @default(cuid())
+  projectId   String
+  envType     EnvType  @default(PRODUCTION)
+  key         String
+  value       String   @db.Text  // AES-256 encrypted
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@unique([projectId, envType, key])
+  @@index([projectId, envType])
+}
+
+model ProjectEnvironment {
+  id          String   @id @default(cuid())
+  projectId   String
+  name        String
+  envType     EnvType  @default(STAGING)
+  deployedUrl String?
+  branch      String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@unique([projectId, envType])
+  @@index([projectId])
 }
 
 // ─────────────────────────────────────────────
