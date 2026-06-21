@@ -366,11 +366,40 @@ model DatabaseConnection {
 // ENUMS
 // ─────────────────────────────────────────────
 
-enum ProjectStatus  { ACTIVE DEPLOYED ARCHIVED }
-enum MessageRole    { USER ASSISTANT SYSTEM }
-enum RiskLevel      { LOW MEDIUM HIGH CRITICAL }
-enum ActionStatus   { PENDING APPROVED REJECTED EXECUTING APPLIED VERIFIED FAILED }
-enum BudgetAction   { ALERT DOWNGRADE STOP }
+enum ProjectStatus {
+  ACTIVE
+  DEPLOYED
+  ARCHIVED
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ActionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXECUTING
+  APPLIED
+  VERIFIED
+  FAILED
+}
+
+enum BudgetAction {
+  ALERT
+  DOWNGRADE
+  STOP
+}
 
 enum IntegrationType {
   GITHUB
