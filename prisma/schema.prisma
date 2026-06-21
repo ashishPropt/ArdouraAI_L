@@ -33,6 +33,7 @@ model User {
   cloudInstances CloudInstance[]
   rules         Rule[]
   activityLogs  ActivityLog[]
+  memberships   OrganizationMember[]
 }
 
 model Account {
@@ -85,8 +86,10 @@ model Project {
   vultrInstanceId String?
   vultrIp         String?
   status          ProjectStatus @default(ACTIVE)
+  orgId           String?
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org          Organization? @relation(fields: [orgId], references: [id], onDelete: SetNull)
   messages     Message[]
   files        ProjectFile[]
   healActions  HealAction[]
@@ -519,6 +522,64 @@ model WorkflowRunLog {
   run  WorkflowRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
   step WorkflowStep? @relation(fields: [stepId], references: [id])
   @@index([runId])
+}
+
+// ─────────────────────────────────────────────
+// ORGANIZATIONS & TEAMS
+// ─────────────────────────────────────────────
+
+enum OrgPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  plan      OrgPlan  @default(FREE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members     OrganizationMember[]
+  invitations Invitation[]
+  projects    Project[]
+}
+
+model OrganizationMember {
+  id       String  @id @default(cuid())
+  orgId    String
+  userId   String
+  role     OrgRole @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([orgId, userId])
+  @@index([userId])
+}
+
+model Invitation {
+  id         String    @id @default(cuid())
+  orgId      String
+  email      String
+  role       OrgRole   @default(MEMBER)
+  token      String    @unique @default(cuid())
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  @@index([orgId])
+  @@index([token])
 }
 
 // ─────────────────────────────────────────────
