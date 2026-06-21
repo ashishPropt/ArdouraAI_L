@@ -14,5 +14,18 @@ module.exports = {
         PORT: 3000,
       },
     },
+    {
+      name: 'ardoura-worker',
+      script: 'node_modules/.bin/tsx',
+      args: 'src/workers/kafka-worker.ts',
+      cwd: '/opt/ardoura-ai',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '512M',
+      env: {
+        NODE_ENV: 'production',
+      },
+    },
   ],
 }

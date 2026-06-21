@@ -89,6 +89,7 @@ model Project {
   messages     Message[]
   files        ProjectFile[]
   healActions  HealAction[]
+  incidents    Incident[]
   llmUsageLogs LLMUsageLog[]
   monitors     Monitor[]
   dbConnections DatabaseConnection[]
@@ -193,7 +194,8 @@ model Rule {
 model HealAction {
   id           String       @id @default(cuid())
   projectId    String?
-  incidentRef  String?      // ServiceNow/Jira ID
+  incidentId   String?      // FK to Incident
+  incidentRef  String?      // ServiceNow/Jira external ID
   title        String
   description  String       @db.Text
   proposedFix  String       @db.Text
@@ -202,16 +204,20 @@ model HealAction {
   riskLevel    RiskLevel    @default(MEDIUM)
   status       ActionStatus @default(PENDING)
   approvedBy   String?
+  approvedAt   DateTime?
   rejectedBy   String?
   rejectionNote String?
   appliedAt    DateTime?
   verifiedAt   DateTime?
   evidence     Json?        // logs, metrics, stack traces that led to this
+  result       Json?        // execution result
   createdAt    DateTime     @default(now())
 
-  project Project? @relation(fields: [projectId], references: [id])
+  project  Project?  @relation(fields: [projectId], references: [id])
+  incident Incident? @relation(fields: [incidentId], references: [id])
   @@index([status])
   @@index([projectId])
+  @@index([incidentId])
 }
 
 // ─────────────────────────────────────────────
@@ -222,30 +228,31 @@ model LLMUsageLog {
   id           String   @id @default(cuid())
   userId       String
   projectId    String?
+  provider     String   @default("anthropic")
   model        String
-  inputTokens  Int
-  outputTokens Int
-  costUsd      Float
-  taskType     String   // CODEGEN | CHAT | ANALYSIS | HEALING | EXPLANATION
+  feature      String   @default("chat")  // CODEGEN | CHAT | ANALYSIS | HEALING | EXPLANATION
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  costUsd      Float    @default(0)
   durationMs   Int?
   createdAt    DateTime @default(now())
 
   project Project? @relation(fields: [projectId], references: [id])
   @@index([userId, createdAt])
-  @@index([projectId])
+  @@index([model, createdAt])
 }
 
 model TokenBudget {
-  id              String      @id @default(cuid())
-  userId          String
-  projectId       String?
-  monthlyLimitUsd Float
-  alertAtPct      Float       @default(80)
-  onExceed        BudgetAction @default(DOWNGRADE)
-  currentMonthUsd Float       @default(0)
-  resetAt         DateTime
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id         String      @id @default(cuid())
+  userId     String
+  name       String
+  limitUsd   Float
+  currentUsd Float       @default(0)
+  model      String?     // if set, tracks only this model
+  action     BudgetAction @default(ALERT)
+  alertPct   Float       @default(80)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([userId])
@@ -342,8 +349,11 @@ model Incident {
   startedAt    DateTime  @default(now())
   resolvedAt   DateTime?
 
-  monitor   Monitor? @relation(fields: [monitorId], references: [id])
+  monitor     Monitor?     @relation(fields: [monitorId], references: [id])
+  project     Project?     @relation(fields: [projectId], references: [id])
+  healActions HealAction[]
   @@index([status])
+  @@index([projectId])
 }
 
 // ─────────────────────────────────────────────
