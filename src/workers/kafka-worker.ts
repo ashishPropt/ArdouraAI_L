@@ -74,7 +74,7 @@ async function runDbWorker() {
 
       for (const row of events) {
         try {
-          const event = row.payload as ArdouraEvent
+          const event = row.payload as unknown as ArdouraEvent
           await handleEvent(event)
           await prisma.kafkaEvent.update({
             where: { id: row.id },
