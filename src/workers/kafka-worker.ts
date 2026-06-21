@@ -19,6 +19,10 @@ import { processEventWithRules } from '@/lib/rules/actions'
 const WORKER_GROUP = 'ardoura-sre-worker'
 const DB_POLL_INTERVAL_MS = 5000
 const DB_BATCH_SIZE = 50
+const MONITOR_POLL_INTERVAL_MS = 60_000  // 1 minute
+
+// Track consecutive failures per monitor to avoid noisy incident creation
+const failureStreak: Record<string, number> = {}
 
 async function handleEvent(event: ArdouraEvent) {
   // Resolve which project this event belongs to
@@ -105,10 +109,94 @@ async function runDbWorker() {
   poll()
 }
 
+// ── Monitor poller ────────────────────────────────────────────────────────────
+
+async function pollMonitors() {
+  try {
+    const monitors = await prisma.monitor.findMany({
+      where: { active: true },
+    })
+
+    for (const monitor of monitors) {
+      const start = Date.now()
+      let status = 'UP'
+      let statusCode: number | null = null
+      let responseMs: number | null = null
+      let error: string | null = null
+
+      try {
+        const controller = new AbortController()
+        const tid = setTimeout(() => controller.abort(), monitor.timeoutSecs * 1000)
+        const res = await fetch(monitor.url, { method: monitor.method, signal: controller.signal })
+        clearTimeout(tid)
+        responseMs = Date.now() - start
+        statusCode = res.status
+        if (res.status !== monitor.expectedStatus) {
+          status = res.status >= 500 ? 'DOWN' : 'DEGRADED'
+        }
+      } catch (err: any) {
+        responseMs = Date.now() - start
+        status = err.name === 'AbortError' ? 'TIMEOUT' : 'DOWN'
+        error = err.message ?? String(err)
+      }
+
+      await prisma.monitorCheck.create({
+        data: { monitorId: monitor.id, status, statusCode, responseMs, error, checkedAt: new Date() },
+      })
+
+      await prisma.monitor.update({
+        where: { id: monitor.id },
+        data: { lastStatus: status, lastCheckedAt: new Date() },
+      })
+
+      if (status !== 'UP') {
+        failureStreak[monitor.id] = (failureStreak[monitor.id] ?? 0) + 1
+        if (failureStreak[monitor.id] === 2) {
+          // 2 consecutive failures → create incident
+          const existing = await prisma.incident.findFirst({
+            where: { monitorId: monitor.id, status: { not: 'RESOLVED' } },
+          })
+          if (!existing) {
+            await prisma.incident.create({
+              data: {
+                monitorId: monitor.id,
+                projectId: monitor.projectId,
+                title: `${monitor.name} is ${status}`,
+                severity: status === 'DOWN' ? 'P1' : 'P2',
+                status: 'OPEN',
+                source: 'MONITOR',
+              },
+            })
+            console.log(`[Monitor] Incident created for ${monitor.name} (${status})`)
+          }
+        }
+      } else {
+        failureStreak[monitor.id] = 0
+        // Auto-resolve open monitor incidents
+        await prisma.incident.updateMany({
+          where: { monitorId: monitor.id, status: 'OPEN' },
+          data: { status: 'RESOLVED', resolvedAt: new Date(), resolution: 'Monitor recovered automatically' },
+        })
+      }
+    }
+  } catch (err) {
+    console.error('[Monitor] Poll error:', err)
+  }
+}
+
+function startMonitorPoller() {
+  console.log('[Monitor] Poller started — interval:', MONITOR_POLL_INTERVAL_MS / 1000, 's')
+  pollMonitors()
+  setInterval(pollMonitors, MONITOR_POLL_INTERVAL_MS)
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 async function main() {
   console.log('[Worker] ArdouraAI SRE Worker starting...')
+
+  // Always start monitor poller regardless of Kafka mode
+  startMonitorPoller()
 
   if (isKafkaEnabled()) {
     await runKafkaWorker()

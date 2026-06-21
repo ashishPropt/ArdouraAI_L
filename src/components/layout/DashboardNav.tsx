@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { Cpu, LayoutGrid, Settings, LogOut, Plus, Plug, Zap, Activity, AlertTriangle, Server, Coins } from 'lucide-react'
+import { Cpu, LayoutGrid, Settings, LogOut, Plus, Plug, Zap, Activity, AlertTriangle, Server, Coins, BarChart2, Globe } from 'lucide-react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -61,7 +61,9 @@ export function DashboardNav({ user }: Props) {
           { href: '/integrations',   icon: Plug,          label: 'Integrations' },
           { href: '/rules',          icon: Zap,           label: 'Automation Rules' },
           { href: '/incidents',      icon: AlertTriangle, label: 'Incidents' },
+          { href: '/monitors',       icon: Globe,         label: 'Monitors' },
           { href: '/observability',  icon: Activity,      label: 'Observability' },
+          { href: '/analytics',      icon: BarChart2,     label: 'Analytics' },
           { href: '/cloud',          icon: Server,        label: 'Cloud Manager' },
           { href: '/tokens',         icon: Coins,         label: 'Token Usage' },
           { href: '/settings',       icon: Settings,      label: 'Settings' },
