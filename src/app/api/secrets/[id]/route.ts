@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/db/prisma'
-import { decryptObject } from '@/lib/vault/crypto'
+import { decryptObject } from '@/lib/vault/encrypt'
 
 type Params = { params: { id: string } }
 

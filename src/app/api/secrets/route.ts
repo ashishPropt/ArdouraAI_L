@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/db/prisma'
-import { encryptObject, decryptObject } from '@/lib/vault/crypto'
+import { encryptObject } from '@/lib/vault/encrypt'
 import type { EnvType } from '@prisma/client'
 
 export async function GET(req: NextRequest) {
@@ -43,5 +43,5 @@ export async function POST(req: NextRequest) {
     update: { value: encrypted, description },
   })
 
-  return NextResponse.json({ ...secret, value: '••••���•••' }, { status: 201 })
+  return NextResponse.json({ ...secret, value: '••••••••' }, { status: 201 })
 }
