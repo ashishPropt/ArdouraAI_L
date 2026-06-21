@@ -1,4 +1,4 @@
-import type { LLMMessage } from './anthropic'
+import type { LLMMessage, LLMResult } from './anthropic'
 
 // Google Gemini via REST API
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
@@ -22,7 +22,7 @@ export async function generateWithGemini(
   messages: LLMMessage[],
   systemPrompt: string,
   model: 'gemini-1.5-flash' | 'gemini-1.5-pro' = 'gemini-1.5-flash'
-): Promise<string> {
+): Promise<LLMResult> {
   const key = getApiKey()
   const body = toGeminiMessages(messages, systemPrompt)
 
@@ -35,7 +35,11 @@ export async function generateWithGemini(
   if (!res.ok) throw new Error(`Gemini error: ${res.status} ${await res.text()}`)
 
   const data = await res.json()
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  return {
+    text: data.candidates?.[0]?.content?.parts?.[0]?.text || '',
+    inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
+    outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
+  }
 }
 
 export async function streamWithGemini(
@@ -43,7 +47,7 @@ export async function streamWithGemini(
   systemPrompt: string,
   model: 'gemini-1.5-flash' | 'gemini-1.5-pro' = 'gemini-1.5-flash',
   onChunk: (text: string) => void
-): Promise<string> {
+): Promise<LLMResult> {
   const key = getApiKey()
   const body = toGeminiMessages(messages, systemPrompt)
 
@@ -58,6 +62,8 @@ export async function streamWithGemini(
   const reader = res.body!.getReader()
   const decoder = new TextDecoder()
   let fullText = ''
+  let inputTokens = 0
+  let outputTokens = 0
   let buffer = ''
 
   while (true) {
@@ -74,9 +80,13 @@ export async function streamWithGemini(
         const parsed = JSON.parse(json)
         const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text || ''
         if (text) { fullText += text; onChunk(text) }
+        if (parsed.usageMetadata) {
+          inputTokens = parsed.usageMetadata.promptTokenCount ?? 0
+          outputTokens = parsed.usageMetadata.candidatesTokenCount ?? 0
+        }
       } catch {}
     }
   }
 
-  return fullText
+  return { text: fullText, inputTokens, outputTokens }
 }

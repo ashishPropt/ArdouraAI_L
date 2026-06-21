@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ExternalLink, Globe, Loader2, Server, X, Zap } from 'lucide-react'
+import { ExternalLink, Globe, Loader2, Server, X, Zap, Copy, Check, Terminal } from 'lucide-react'
 import { VULTR_PLANS, VULTR_REGIONS } from '@/lib/vultr/client'
 
 interface Props {
@@ -17,6 +17,9 @@ export function DeployModal({ project, onClose, onDeployed }: Props) {
   const [customApiKey, setCustomApiKey] = useState('')
   const [deploying, setDeploying] = useState(false)
   const [result, setResult] = useState<{ ip: string; url: string } | null>(null)
+  const [script, setScript] = useState<string | null>(null)
+  const [steps, setSteps] = useState<string[]>([])
+  const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
 
   async function handleDeploy() {
@@ -36,10 +39,40 @@ export function DeployModal({ project, onClose, onDeployed }: Props) {
     if (res.ok) {
       setResult({ ip: data.ip, url: data.url })
       onDeployed(data.url)
+      // Fetch setup script
+      const setupRes = await fetch('/api/deploy/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: project.id }),
+      })
+      if (setupRes.body) {
+        const reader = setupRes.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n'); buffer = lines.pop() || ''
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            const d = JSON.parse(line.slice(6))
+            if (d.type === 'script') setScript(d.content)
+            if (d.type === 'instructions') setSteps(d.steps)
+          }
+        }
+      }
     } else {
       setError(data.error || 'Deployment failed')
     }
     setDeploying(false)
+  }
+
+  async function copyScript() {
+    if (!script) return
+    await navigator.clipboard.writeText(script)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
   }
 
   return (
@@ -61,22 +94,58 @@ export function DeployModal({ project, onClose, onDeployed }: Props) {
         </div>
 
         {result ? (
-          <div className="p-6 text-center">
-            <div className="w-14 h-14 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Globe className="w-7 h-7 text-green-400" />
+          <div className="p-5 overflow-y-auto max-h-[70vh]">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center flex-shrink-0">
+                <Globe className="w-5 h-5 text-green-400" />
+              </div>
+              <div>
+                <p className="text-white font-semibold">VPS provisioned!</p>
+                <p className="text-xs text-slate-400">Allow 2-3 minutes for the server to boot</p>
+              </div>
             </div>
-            <h3 className="text-white font-semibold text-lg mb-2">Deployment started!</h3>
-            <p className="text-slate-400 text-sm mb-4">Your VPS is being provisioned. Ready in ~2 minutes.</p>
-            <div className="bg-slate-800 rounded-xl p-4 mb-4">
-              <p className="text-xs text-slate-500 mb-1">Server IP</p>
-              <p className="text-white font-mono font-semibold">{result.ip}</p>
-              <p className="text-xs text-slate-500 mt-2 mb-1">URL</p>
-              <a href={result.url} target="_blank" rel="noopener noreferrer" className="text-ardoura-400 hover:text-ardoura-300 text-sm flex items-center justify-center gap-1">
+
+            <div className="bg-slate-800 rounded-xl p-3 mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-slate-500">IP</p>
+                <p className="text-white font-mono text-sm">{result.ip}</p>
+              </div>
+              <a href={result.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-ardoura-400 hover:text-ardoura-300 text-xs">
                 {result.url} <ExternalLink className="w-3 h-3" />
               </a>
             </div>
-            <p className="text-xs text-slate-500">SSH into the server and run the deploy script to serve your app.</p>
-            <button onClick={onClose} className="mt-4 bg-ardoura-600 hover:bg-ardoura-500 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors">
+
+            {steps.length > 0 && (
+              <div className="mb-3">
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Next steps</p>
+                <ol className="space-y-1">
+                  {steps.map((s, i) => (
+                    <li key={i} className="flex items-start gap-2 text-xs text-slate-300">
+                      <span className="bg-ardoura-700 text-white w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 text-[10px]">{i + 1}</span>
+                      {s}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {script && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <Terminal className="w-3 h-3" /> Bootstrap Script
+                  </p>
+                  <button onClick={copyScript} className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors">
+                    {copied ? <><Check className="w-3 h-3 text-green-400" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
+                  </button>
+                </div>
+                <pre className="bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-green-300 font-mono overflow-x-auto whitespace-pre max-h-48 overflow-y-auto">
+                  {script}
+                </pre>
+              </div>
+            )}
+
+            <button onClick={onClose} className="mt-4 w-full bg-ardoura-600 hover:bg-ardoura-500 text-white py-2 rounded-lg text-sm font-medium transition-colors">
               Done
             </button>
           </div>

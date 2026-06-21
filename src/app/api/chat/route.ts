@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/prisma'
 import { routedStream } from '@/lib/llm/router'
 import { SYSTEM_PROMPT_CHAT } from '@/lib/codegen/prompts'
 import type { LLMMessage } from '@/lib/llm/providers/anthropic'
+import { logLLMUsage } from '@/lib/llm/log'
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -35,9 +36,11 @@ export async function POST(req: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const { text, model } = await routedStream(history, SYSTEM_PROMPT_CHAT, 'medium', (chunk) => {
+        const { text, model, inputTokens, outputTokens } = await routedStream(history, SYSTEM_PROMPT_CHAT, 'medium', (chunk) => {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'chunk', text: chunk })}\n\n`))
         })
+
+        logLLMUsage({ userId: session.user.id, projectId, model, feature: 'chat', inputTokens, outputTokens })
 
         const shouldGenerate = text.includes('##GENERATE##')
 

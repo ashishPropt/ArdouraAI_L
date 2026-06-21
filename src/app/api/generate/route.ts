@@ -3,6 +3,7 @@ import { auth } from '@/auth'
 import { prisma } from '@/lib/db/prisma'
 import { generateProject } from '@/lib/codegen/generator'
 import type { LLMMessage } from '@/lib/llm/providers/anthropic'
+import { logLLMUsage } from '@/lib/llm/log'
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -36,6 +37,16 @@ export async function POST(req: NextRequest) {
         send({ type: 'status', message: 'Generating code with AI...' })
 
         const generated = await generateProject(description, history)
+
+        // Log token usage (fire-and-forget)
+        logLLMUsage({
+          userId: session.user.id,
+          projectId,
+          model: generated._model,
+          feature: 'codegen',
+          inputTokens: generated._inputTokens,
+          outputTokens: generated._outputTokens,
+        })
 
         send({ type: 'status', message: 'Saving generated files...' })
 

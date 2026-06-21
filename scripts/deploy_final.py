@@ -28,6 +28,7 @@ client.connect(HOST, username=USER, password=PASSWORD, timeout=20)
 print('Connected to', HOST, flush=True)
 
 try:
+    run(client, f'cd {APP_DIR} && git checkout -- . 2>&1')
     run(client, f'cd {APP_DIR} && git pull origin main 2>&1')
     # Force-install Phase 1 packages first so they land in the lock file
     run(client, f'cd {APP_DIR} && npm install kafkajs pg mysql2 mongodb @types/pg --legacy-peer-deps 2>&1', timeout=180)

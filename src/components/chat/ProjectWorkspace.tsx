@@ -176,6 +176,12 @@ export function ProjectWorkspace({ project: initial }: { project: Project }) {
         activePanel={activePanel}
         setActivePanel={setActivePanel}
         onProjectUpdate={setProject}
+        onFilesLoaded={(newFiles) => {
+          const mapped = newFiles.map((f: any) => ({ id: f.id, path: f.path, content: f.content, language: f.language }))
+          setFiles(mapped)
+          setSelectedFile(mapped[0] || null)
+          setActivePanel('code')
+        }}
       />
       <div className="flex-1 flex overflow-hidden">
         <div className={`${activePanel === 'chat' ? 'flex-1' : 'w-80 flex-shrink-0'} flex flex-col border-r border-slate-800`}>
@@ -188,9 +194,14 @@ export function ProjectWorkspace({ project: initial }: { project: Project }) {
         </div>
         <div className={`${activePanel === 'code' ? 'flex-1' : 'flex-1'} flex flex-col`}>
           <CodePanel
+            projectId={project.id}
             files={files}
             selectedFile={selectedFile}
             onSelectFile={setSelectedFile}
+            onFileUpdated={(updated) => {
+              setFiles(prev => prev.map(f => f.id === updated.id ? updated : f))
+              setSelectedFile(updated)
+            }}
           />
         </div>
       </div>

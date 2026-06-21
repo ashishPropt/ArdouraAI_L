@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Code2, Github, Globe, Loader2, MessageSquare, RefreshCw, Server } from 'lucide-react'
+import { ArrowLeft, Code2, Github, Globe, Loader2, MessageSquare, RefreshCw, Server, LayoutTemplate } from 'lucide-react'
 import { DeployModal } from '@/components/deploy/DeployModal'
+import { TemplateModal } from './TemplateModal'
 
 interface Project {
   id: string
@@ -21,15 +22,17 @@ interface Props {
   setActivePanel: (p: 'chat' | 'code') => void
   onGenerate: () => void
   onProjectUpdate: (p: any) => void
+  onFilesLoaded?: (files: any[]) => void
 }
 
 export function ProjectToolbar({
-  project, filesCount, generating, activePanel, setActivePanel, onGenerate, onProjectUpdate,
+  project, filesCount, generating, activePanel, setActivePanel, onGenerate, onProjectUpdate, onFilesLoaded,
 }: Props) {
   const router = useRouter()
   const [pushingGitHub, setPushingGitHub] = useState(false)
   const [githubUrl, setGithubUrl] = useState(project.githubRepo)
   const [showDeploy, setShowDeploy] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   async function pushToGitHub() {
     setPushingGitHub(true)
@@ -80,6 +83,14 @@ export function ProjectToolbar({
         </div>
 
         <div className="flex items-center gap-2 ml-auto">
+          <button
+            onClick={() => setShowTemplates(true)}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white border border-slate-700 hover:border-slate-500 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <LayoutTemplate className="w-3.5 h-3.5" />
+            Templates
+          </button>
+
           {filesCount > 0 && (
             <button
               onClick={onGenerate}
@@ -130,6 +141,14 @@ export function ProjectToolbar({
           project={project}
           onClose={() => setShowDeploy(false)}
           onDeployed={(url) => onProjectUpdate({ ...project, deployedUrl: url })}
+        />
+      )}
+
+      {showTemplates && (
+        <TemplateModal
+          projectId={project.id}
+          onApplied={(files) => { onFilesLoaded?.(files); setShowTemplates(false) }}
+          onClose={() => setShowTemplates(false)}
         />
       )}
     </>

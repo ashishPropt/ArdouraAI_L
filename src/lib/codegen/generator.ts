@@ -19,28 +19,26 @@ export interface GeneratedProject {
 export async function generateProject(
   projectDescription: string,
   conversationHistory: LLMMessage[]
-): Promise<GeneratedProject> {
+): Promise<GeneratedProject & { _model: string; _inputTokens: number; _outputTokens: number }> {
   const conversationText = conversationHistory
     .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
     .join('\n\n')
 
   const prompt = buildGeneratorPrompt(projectDescription, conversationText)
 
-  const { text } = await routedGenerate(
+  const { text, model, inputTokens, outputTokens } = await routedGenerate(
     [{ role: 'user', content: prompt }],
     SYSTEM_PROMPT_GENERATOR,
     'high'
   )
 
-  // Extract JSON from response (may be wrapped in markdown code blocks)
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || text.match(/(\{[\s\S]*\})/)
   const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : text
 
   try {
     const project = JSON.parse(jsonStr.trim()) as GeneratedProject
-    return project
+    return { ...project, _model: model, _inputTokens: inputTokens, _outputTokens: outputTokens }
   } catch {
-    // If JSON parse fails, create a minimal structure
     return {
       projectName: 'generated-app',
       description: projectDescription,
@@ -53,6 +51,9 @@ export async function generateProject(
       ],
       setupCommands: [],
       envVars: [],
+      _model: model,
+      _inputTokens: inputTokens,
+      _outputTokens: outputTokens,
     }
   }
 }
