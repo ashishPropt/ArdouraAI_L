@@ -57,7 +57,7 @@ async function executeAction(
         description: `Auto-triggered by rule. Params: ${JSON.stringify(resolvedParams, null, 2)}`,
         fixType: `${ruleAction.tool}_${ruleAction.action}`,
         riskLevel: (result.riskLevel ?? 'MEDIUM') as any,
-        evidence: { event, params: resolvedParams },
+        evidence: { event: event as unknown as Record<string, unknown>, params: resolvedParams } as any,
         proposedFix: resolvedParams,
         status: 'PENDING',
       },
