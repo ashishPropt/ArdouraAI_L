@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { Cpu, LayoutGrid, Settings, LogOut, Plus } from 'lucide-react'
+import { Cpu, LayoutGrid, Settings, LogOut, Plus, Plug, Zap, Activity } from 'lucide-react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -56,28 +56,26 @@ export function DashboardNav({ user }: Props) {
 
       {/* Nav links */}
       <nav className="flex-1 px-3 space-y-1">
-        <Link
-          href="/dashboard"
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-            pathname === '/dashboard'
-              ? 'bg-ardoura-800/50 text-white'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800'
-          }`}
-        >
-          <LayoutGrid className="w-4 h-4" />
-          Projects
-        </Link>
-        <Link
-          href="/settings"
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-            pathname === '/settings'
-              ? 'bg-ardoura-800/50 text-white'
-              : 'text-slate-400 hover:text-white hover:bg-slate-800'
-          }`}
-        >
-          <Settings className="w-4 h-4" />
-          Settings
-        </Link>
+        {[
+          { href: '/dashboard',    icon: LayoutGrid, label: 'Projects' },
+          { href: '/integrations', icon: Plug,        label: 'Integrations' },
+          { href: '/rules',        icon: Zap,         label: 'Automation Rules' },
+          { href: '/incidents',    icon: Activity,    label: 'Incidents' },
+          { href: '/settings',     icon: Settings,    label: 'Settings' },
+        ].map(({ href, icon: Icon, label }) => (
+          <Link
+            key={href}
+            href={href}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+              pathname === href || pathname.startsWith(href + '/')
+                ? 'bg-ardoura-800/50 text-white'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Icon className="w-4 h-4" />
+            {label}
+          </Link>
+        ))}
       </nav>
 
       {/* User footer */}

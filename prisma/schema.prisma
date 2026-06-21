@@ -7,6 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─────────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────────
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -17,13 +21,17 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  githubToken   String?
+  githubToken    String?
   githubUsername String?
-  vultrApiKey   String?
+  vultrApiKey    String?
 
   projects      Project[]
   accounts      Account[]
   sessions      Session[]
+  integrations  Integration[]
+  tokenBudgets  TokenBudget[]
+  cloudInstances CloudInstance[]
+  rules         Rule[]
 }
 
 model Account {
@@ -39,9 +47,7 @@ model Account {
   scope             String?
   id_token          String? @db.Text
   session_state     String?
-
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@unique([provider, providerAccountId])
 }
 
@@ -57,9 +63,12 @@ model VerificationToken {
   identifier String
   token      String   @unique
   expires    DateTime
-
   @@unique([identifier, token])
 }
+
+// ─────────────────────────────────────────────
+// BUILDER (existing)
+// ─────────────────────────────────────────────
 
 model Project {
   id          String   @id @default(cuid())
@@ -69,16 +78,20 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  githubRepo    String?
-  githubOwner   String?
-  deployedUrl   String?
+  githubRepo      String?
+  githubOwner     String?
+  deployedUrl     String?
   vultrInstanceId String?
-  vultrIp       String?
-  status        ProjectStatus @default(ACTIVE)
+  vultrIp         String?
+  status          ProjectStatus @default(ACTIVE)
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages Message[]
-  files    ProjectFile[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages     Message[]
+  files        ProjectFile[]
+  healActions  HealAction[]
+  llmUsageLogs LLMUsageLog[]
+  monitors     Monitor[]
+  dbConnections DatabaseConnection[]
 
   @@index([userId])
 }
@@ -90,9 +103,7 @@ model Message {
   content   String      @db.Text
   createdAt DateTime    @default(now())
   metadata  Json?
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   @@index([projectId])
 }
 
@@ -104,21 +115,274 @@ model ProjectFile {
   language  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   @@unique([projectId, path])
   @@index([projectId])
 }
 
-enum ProjectStatus {
-  ACTIVE
-  DEPLOYED
-  ARCHIVED
+// ─────────────────────────────────────────────
+// MCP INTEGRATIONS + CREDENTIAL VAULT
+// ─────────────────────────────────────────────
+
+model Integration {
+  id          String          @id @default(cuid())
+  userId      String
+  type        IntegrationType
+  name        String          // display label e.g. "Prod Jira"
+  config      String          @db.Text // AES-256 encrypted JSON
+  active      Boolean         @default(true)
+  lastTestedAt DateTime?
+  lastTestOk  Boolean?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, type])
 }
 
-enum MessageRole {
-  USER
-  ASSISTANT
-  SYSTEM
+// ─────────────────────────────────────────────
+// KAFKA EVENT LOG
+// ─────────────────────────────────────────────
+
+model KafkaEvent {
+  id          String   @id @default(cuid())
+  topic       String
+  key         String?
+  payload     Json
+  source      String
+  processed   Boolean  @default(false)
+  processingResult Json?
+  error       String?  @db.Text
+  createdAt   DateTime @default(now())
+  processedAt DateTime?
+
+  @@index([topic, processed])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────
+// RULE ENGINE
+// ─────────────────────────────────────────────
+
+model Rule {
+  id          String     @id @default(cuid())
+  userId      String
+  projectId   String?    // target project this rule applies to
+  name        String
+  description String?
+  topic       String     // kafka topic to match
+  conditions  Json       // array of { field, operator, value }
+  actions     Json       // array of { tool, action, params }
+  priority    Int        @default(100)
+  enabled     Boolean    @default(true)
+  cooldownMs  Int?       // minimum ms between firings
+  fireCount   Int        @default(0)
+  lastFiredAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, topic, enabled])
+  @@index([projectId, topic, enabled])
+}
+
+// ─────────────────────────────────────────────
+// SELF-HEALING / HITL
+// ─────────────────────────────────────────────
+
+model HealAction {
+  id           String       @id @default(cuid())
+  projectId    String?
+  incidentRef  String?      // ServiceNow/Jira ID
+  title        String
+  description  String       @db.Text
+  proposedFix  String       @db.Text
+  fixType      String       // OOM | CRASH | DISK | CODE_PATCH | SCALE_UP | CUSTOM
+  diff         String?      @db.Text
+  riskLevel    RiskLevel    @default(MEDIUM)
+  status       ActionStatus @default(PENDING)
+  approvedBy   String?
+  rejectedBy   String?
+  rejectionNote String?
+  appliedAt    DateTime?
+  verifiedAt   DateTime?
+  evidence     Json?        // logs, metrics, stack traces that led to this
+  createdAt    DateTime     @default(now())
+
+  project Project? @relation(fields: [projectId], references: [id])
+  @@index([status])
+  @@index([projectId])
+}
+
+// ─────────────────────────────────────────────
+// TOKEN / LLM USAGE
+// ─────────────────────────────────────────────
+
+model LLMUsageLog {
+  id           String   @id @default(cuid())
+  userId       String
+  projectId    String?
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  costUsd      Float
+  taskType     String   // CODEGEN | CHAT | ANALYSIS | HEALING | EXPLANATION
+  durationMs   Int?
+  createdAt    DateTime @default(now())
+
+  project Project? @relation(fields: [projectId], references: [id])
+  @@index([userId, createdAt])
+  @@index([projectId])
+}
+
+model TokenBudget {
+  id              String      @id @default(cuid())
+  userId          String
+  projectId       String?
+  monthlyLimitUsd Float
+  alertAtPct      Float       @default(80)
+  onExceed        BudgetAction @default(DOWNGRADE)
+  currentMonthUsd Float       @default(0)
+  resetAt         DateTime
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────
+// CLOUD MANAGER
+// ─────────────────────────────────────────────
+
+model CloudInstance {
+  id           String   @id @default(cuid())
+  userId       String
+  projectId    String?
+  provider     String   @default("vultr")
+  providerId   String   @unique
+  label        String
+  ip           String?
+  region       String
+  plan         String
+  os           String?
+  status       String
+  monthlyCost  Float
+  sshKeyId     String?
+  tags         String[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metrics InstanceMetric[]
+  @@index([userId])
+}
+
+model InstanceMetric {
+  id         String   @id @default(cuid())
+  instanceId String
+  cpuPct     Float?
+  ramPct     Float?
+  diskPct    Float?
+  bandwidthMb Float?
+  timestamp  DateTime @default(now())
+
+  instance CloudInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  @@index([instanceId, timestamp])
+}
+
+// ─────────────────────────────────────────────
+// SRE MONITORING
+// ─────────────────────────────────────────────
+
+model Monitor {
+  id            String   @id @default(cuid())
+  projectId     String
+  name          String
+  url           String
+  intervalSecs  Int      @default(60)
+  timeoutSecs   Int      @default(10)
+  method        String   @default("GET")
+  expectedStatus Int     @default(200)
+  active        Boolean  @default(true)
+  lastStatus    String?  // UP | DOWN | DEGRADED
+  lastCheckedAt DateTime?
+  createdAt     DateTime @default(now())
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  checks    MonitorCheck[]
+  incidents Incident[]
+  @@index([projectId, active])
+}
+
+model MonitorCheck {
+  id          String   @id @default(cuid())
+  monitorId   String
+  status      String   // UP | DOWN | TIMEOUT
+  statusCode  Int?
+  responseMs  Int?
+  error       String?
+  checkedAt   DateTime @default(now())
+
+  monitor Monitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  @@index([monitorId, checkedAt])
+}
+
+model Incident {
+  id           String    @id @default(cuid())
+  monitorId    String?
+  projectId    String?
+  title        String
+  severity     String    @default("P2")
+  status       String    @default("OPEN") // OPEN | INVESTIGATING | RESOLVED
+  source       String    // MONITOR | DATADOG | DYNATRACE | MANUAL
+  externalRef  String?   // ServiceNow / Jira ID
+  rootCause    String?
+  resolution   String?
+  startedAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+
+  monitor   Monitor? @relation(fields: [monitorId], references: [id])
+  @@index([status])
+}
+
+// ─────────────────────────────────────────────
+// DATABASE CONNECTIONS (for monitored apps)
+// ─────────────────────────────────────────────
+
+model DatabaseConnection {
+  id          String   @id @default(cuid())
+  projectId   String
+  name        String
+  type        String   // POSTGRES | MYSQL | MONGODB
+  config      String   @db.Text // AES-256 encrypted JSON
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum ProjectStatus  { ACTIVE DEPLOYED ARCHIVED }
+enum MessageRole    { USER ASSISTANT SYSTEM }
+enum RiskLevel      { LOW MEDIUM HIGH CRITICAL }
+enum ActionStatus   { PENDING APPROVED REJECTED EXECUTING APPLIED VERIFIED FAILED }
+enum BudgetAction   { ALERT DOWNGRADE STOP }
+
+enum IntegrationType {
+  GITHUB
+  JIRA
+  CONFLUENCE
+  SERVICENOW
+  DATADOG
+  DYNATRACE
+  KAFKA
+  SLACK
+  PAGERDUTY
+  DATABASE
+  VULTR
+  EMAIL
 }
