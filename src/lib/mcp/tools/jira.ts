@@ -29,7 +29,7 @@ export async function jiraTool(
   params: Record<string, unknown>,
   config: Record<string, unknown>
 ): Promise<MCPToolResult> {
-  const cfg = config as JiraConfig
+  const cfg = config as unknown as JiraConfig
 
   switch (action) {
     case 'create_issue': {

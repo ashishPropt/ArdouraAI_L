@@ -28,7 +28,7 @@ export async function datadogTool(
   params: Record<string, unknown>,
   config: Record<string, unknown>
 ): Promise<MCPToolResult> {
-  const cfg = config as DDConfig
+  const cfg = config as unknown as DDConfig
 
   switch (action) {
     case 'query_metrics': {

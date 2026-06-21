@@ -26,7 +26,7 @@ export async function vultrTool(
   params: Record<string, unknown>,
   config: Record<string, unknown>
 ): Promise<MCPToolResult> {
-  const cfg = config as VultrConfig
+  const cfg = config as unknown as VultrConfig
 
   switch (action) {
     case 'list_instances': {

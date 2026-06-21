@@ -26,7 +26,7 @@ export async function slackTool(
   params: Record<string, unknown>,
   config: Record<string, unknown>
 ): Promise<MCPToolResult> {
-  const cfg = config as SlackConfig
+  const cfg = config as unknown as SlackConfig
   const channel = (params.channel as string) ?? cfg.channel ?? '#general'
 
   switch (action) {

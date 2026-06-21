@@ -29,7 +29,7 @@ export async function confluenceTool(
   params: Record<string, unknown>,
   config: Record<string, unknown>
 ): Promise<MCPToolResult> {
-  const cfg = config as ConfluenceConfig
+  const cfg = config as unknown as ConfluenceConfig
 
   switch (action) {
     case 'create_page': {

@@ -27,7 +27,7 @@ export async function githubTool(
   params: Record<string, unknown>,
   config: Record<string, unknown>
 ): Promise<MCPToolResult> {
-  const cfg = config as GitHubConfig
+  const cfg = config as unknown as GitHubConfig
   const owner = cfg.owner
   const repo = (params.repo as string) ?? cfg.defaultRepo
 

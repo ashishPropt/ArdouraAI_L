@@ -28,7 +28,7 @@ export async function servicenowTool(
   params: Record<string, unknown>,
   config: Record<string, unknown>
 ): Promise<MCPToolResult> {
-  const cfg = config as SNConfig
+  const cfg = config as unknown as SNConfig
 
   switch (action) {
     case 'create_incident': {

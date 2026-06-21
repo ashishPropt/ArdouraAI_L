@@ -25,7 +25,7 @@ export async function dynatraceTool(
   params: Record<string, unknown>,
   config: Record<string, unknown>
 ): Promise<MCPToolResult> {
-  const cfg = config as DTConfig
+  const cfg = config as unknown as DTConfig
 
   switch (action) {
     case 'get_problems': {

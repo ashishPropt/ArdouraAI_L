@@ -54,7 +54,7 @@ export async function databaseTool(
   params: Record<string, unknown>,
   config: Record<string, unknown>
 ): Promise<MCPToolResult> {
-  const cfg = config as DBConfig
+  const cfg = config as unknown as DBConfig
 
   if (cfg.type === 'MONGODB') {
     return { success: false, error: 'MongoDB read-only introspection not yet implemented' }
