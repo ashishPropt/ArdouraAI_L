@@ -1,8 +1,9 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/db/prisma'
 import { routedStream } from '@/lib/llm/router'
 import { SYSTEM_PROMPT_CHAT } from '@/lib/codegen/prompts'
+import { rateLimit, getRateLimitHeaders } from '@/lib/ratelimit'
 import type { LLMMessage } from '@/lib/llm/providers/anthropic'
 import { logLLMUsage } from '@/lib/llm/log'
 
@@ -10,6 +11,11 @@ export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session?.user?.id) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+  }
+
+  const rl = rateLimit(`chat:${session.user.id}`, 30, 60_000) // 30 req/min
+  if (!rl.allowed) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: getRateLimitHeaders(rl, 30) })
   }
 
   const { projectId, message } = await req.json()
