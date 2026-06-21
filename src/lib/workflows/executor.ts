@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
-import { routeLLM } from '@/lib/llm/router'
+import { routedGenerate } from '@/lib/llm/router'
+import type { TaskComplexity } from '@/lib/llm/router'
 import type { WorkflowStep } from '@prisma/client'
 
 interface StepResult {
@@ -50,8 +51,9 @@ async function executeStep(
     switch (step.type) {
       case 'LLM_GENERATE': {
         const prompt = interpolate((config.prompt as string) ?? '', context)
-        const model = config.model as string | undefined
-        const result = await routeLLM([{ role: 'user', content: prompt }], model)
+        const complexity = (config.complexity as TaskComplexity) ?? 'medium'
+        const system = (config.system as string) ?? 'You are a helpful assistant.'
+        const result = await routedGenerate([{ role: 'user', content: prompt }], system, complexity)
         output = { text: result.text, model: result.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens }
         break
       }
@@ -122,7 +124,7 @@ export async function executeWorkflow(
   if (!workflow) throw new Error('Workflow not found')
 
   const run = await prisma.workflowRun.create({
-    data: { workflowId, status: 'RUNNING', triggeredBy, input },
+    data: { workflowId, status: 'RUNNING', triggeredBy, input: input as any },
   })
 
   const context: Record<string, unknown> = { input, steps: {} as Record<string, unknown> }
@@ -139,8 +141,8 @@ export async function executeWorkflow(
         stepId: step.id,
         stepName: step.name,
         status: result.success ? 'SUCCESS' : 'FAILED',
-        input: context as Record<string, unknown>,
-        output: result.output as Record<string, unknown>,
+        input: context as any,
+        output: result.output as any,
         error: result.error,
         durationMs: result.durationMs,
       },
@@ -160,7 +162,7 @@ export async function executeWorkflow(
     where: { id: run.id },
     data: {
       status: runStatus,
-      output: finalOutput as Record<string, unknown>,
+      output: finalOutput as any,
       error: runError,
       completedAt: new Date(),
     },

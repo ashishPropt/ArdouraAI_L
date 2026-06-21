@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
           name: s.name,
           stepOrder: idx,
           type: s.type,
-          config: s.config ?? {},
+          config: (s.config ?? {}) as any,
         })),
       },
     },

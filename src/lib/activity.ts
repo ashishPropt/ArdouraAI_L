@@ -17,7 +17,7 @@ export async function logActivity({
 }) {
   try {
     await prisma.activityLog.create({
-      data: { userId, projectId, action, entity, entityId, metadata: metadata ?? {} },
+      data: { userId, projectId, action, entity, entityId, metadata: (metadata ?? {}) as any },
     })
   } catch (err) {
     console.error('logActivity error:', err)
