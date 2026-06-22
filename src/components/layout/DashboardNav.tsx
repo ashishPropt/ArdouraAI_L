@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { Cpu, LayoutGrid, Settings, LogOut, Plus, Plug, Zap, Activity, AlertTriangle, Server, Coins, BarChart2, Globe, Workflow, ListChecks, Building2, Brain, KeyRound, CreditCard, Key, Megaphone } from 'lucide-react'
+import { Cpu, LayoutGrid, Settings, LogOut, Plus, Plug, Zap, Activity, AlertTriangle, Server, Coins, BarChart2, Globe, Workflow, ListChecks, Building2, Brain, KeyRound, CreditCard, Key, Megaphone, Download } from 'lucide-react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -58,6 +58,7 @@ export function DashboardNav({ user }: Props) {
       <nav className="flex-1 px-3 space-y-1">
         {[
           { href: '/projects',       icon: LayoutGrid,    label: 'Projects' },
+          { href: '/import',         icon: Download,      label: 'Import (WP)' },
           { href: '/integrations',   icon: Plug,          label: 'Integrations' },
           { href: '/rules',          icon: Zap,           label: 'Automation Rules' },
           { href: '/incidents',      icon: AlertTriangle, label: 'Incidents' },
