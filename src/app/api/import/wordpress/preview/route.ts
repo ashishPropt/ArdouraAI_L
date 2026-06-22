@@ -22,6 +22,8 @@ export async function POST(req: NextRequest) {
       site = await fetchFromWPAPI(body.url)
     }
 
+    const customTypeNames = [...new Set(site.customPostTypes.map(p => p.postType))]
+
     return NextResponse.json({
       title: site.title,
       description: site.description,
@@ -31,18 +33,34 @@ export async function POST(req: NextRequest) {
         pages: site.pages.length,
         categories: site.categories.length,
         tags: site.tags.length,
+        media: site.media.length,
+        customPostTypes: site.customPostTypes.length,
+        menus: site.menus.length,
       },
+      homepage: site.frontPageId > 0
+        ? `Static page: "${site.pages.find(p => p.id === site.frontPageId)?.title || 'Unknown'}"`
+        : 'Blog listing',
+      pages: site.pages.map(p => ({
+        title: p.title,
+        slug: p.slug,
+        hasContent: p.content.length > 50,
+        hasFeaturedImage: !!p.featuredImageUrl,
+        parentId: p.parentId,
+      })),
       samplePosts: site.posts.slice(0, 5).map(p => ({
         title: p.title,
         slug: p.slug,
         date: p.date,
         categories: p.categories,
         author: p.author,
+        hasFeaturedImage: !!p.featuredImageUrl,
       })),
-      samplePages: site.pages.slice(0, 5).map(p => ({
-        title: p.title,
-        slug: p.slug,
+      menus: site.menus.map(m => ({
+        name: m.name,
+        itemCount: m.items.length,
+        topLevel: m.items.map(i => i.title),
       })),
+      customPostTypes: customTypeNames,
       categories: site.categories.slice(0, 20).map(c => ({
         name: c.name,
         slug: c.slug,

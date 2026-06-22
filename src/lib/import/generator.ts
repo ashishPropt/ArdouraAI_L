@@ -1,116 +1,156 @@
 import { routedGenerate } from '@/lib/llm/router'
-import type { WPSite } from './wordpress'
+import type { WPSite, WPMenuItem } from './wordpress'
 
 const SYSTEM = `You are an expert web developer converting WordPress sites to modern React + Node.js + PostgreSQL applications.
-Generate complete, production-ready code. Return ONLY a valid JSON array — no markdown fences, no explanation text before or after.`
+You preserve ALL content — every page, post, navigation item, and custom post type.
+Return ONLY a valid JSON array of file objects — no markdown fences, no explanation.`
 
-export async function generateFromWordPress(site: WPSite): Promise<Array<{ path: string; content: string; language: string }>> {
-  const postSamples = site.posts.slice(0, 8).map(p =>
-    `- "${p.title}" (slug: ${p.slug}, cats: ${p.categories.join(', ') || 'none'}, author: ${p.author})`
-  ).join('\n')
+function flattenMenuItems(items: WPMenuItem[], depth = 0): string {
+  return items.map(item => {
+    const indent = '  '.repeat(depth)
+    const children = item.children.length > 0 ? '\n' + flattenMenuItems(item.children, depth + 1) : ''
+    return `${indent}- "${item.title}" → ${item.url || `/${item.slug}`}${item.target === '_blank' ? ' [external]' : ''}${children}`
+  }).join('\n')
+}
 
-  const pageSamples = site.pages.slice(0, 8).map(p =>
-    `- "${p.title}" (slug: ${p.slug})`
-  ).join('\n')
+export async function generateFromWordPress(
+  site: WPSite
+): Promise<Array<{ path: string; content: string; language: string }>> {
 
-  const catList = site.categories.slice(0, 30).map(c =>
-    `${c.name} (slug: ${c.slug}, count: ${c.count})`
-  ).join(', ')
+  // Build navigation description
+  const navDesc = site.menus.length > 0
+    ? site.menus.map(m => `Menu "${m.name}":\n${flattenMenuItems(m.items)}`).join('\n\n')
+    : 'No menus found — use top-level pages as nav'
 
-  const sampleContent = JSON.stringify(
-    site.posts.slice(0, 5).map(p => ({
-      id: p.id,
-      title: p.title,
-      slug: p.slug,
-      excerpt: p.excerpt.replace(/<[^>]+>/g, '').slice(0, 300),
+  // Describe every page with its full content (truncated per page)
+  const pageDesc = site.pages.map(p => {
+    const content = p.content.slice(0, 800).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    return `  Page: "${p.title}" slug=/${p.slug} parentId=${p.parentId}${p.featuredImageUrl ? ` image=${p.featuredImageUrl}` : ''}\n    Content preview: ${content || '(empty)'}...`
+  }).join('\n')
+
+  // Describe custom post types
+  const cptDesc = site.customPostTypes.length > 0
+    ? [...new Set(site.customPostTypes.map(p => p.postType))].map(type => {
+        const items = site.customPostTypes.filter(p => p.postType === type)
+        return `  Post type "${type}": ${items.length} items — ${items.slice(0, 5).map(i => `"${i.title}"`).join(', ')}${items.length > 5 ? '...' : ''}`
+      }).join('\n')
+    : '  (none)'
+
+  // Sample posts for data seeding
+  const postDataSample = JSON.stringify(
+    site.posts.slice(0, 10).map(p => ({
+      id: p.id, title: p.title, slug: p.slug,
+      excerpt: p.excerpt.replace(/<[^>]+>/g, '').slice(0, 200),
+      content: p.content.slice(0, 500),
+      date: p.date, categories: p.categories, tags: p.tags,
+      author: p.author, featuredImageUrl: p.featuredImageUrl || null,
+    })), null, 2)
+
+  // All pages data for seeding
+  const pageDataSample = JSON.stringify(
+    site.pages.map(p => ({
+      id: p.id, title: p.title, slug: p.slug,
       content: p.content.slice(0, 1000),
-      date: p.date,
-      categories: p.categories,
-      tags: p.tags,
-      author: p.author,
+      parentId: p.parentId, menuOrder: p.menuOrder,
       featuredImageUrl: p.featuredImageUrl || null,
-    })),
-    null,
-    2
-  )
+    })), null, 2)
 
-  const prompt = `Convert this WordPress site to a React + Node.js + PostgreSQL application.
+  const prompt = `Convert this WordPress site to a complete React + Express + PostgreSQL application.
+Preserve EVERY page with its real content. This is a full website, not just a blog.
 
-Site: "${site.title}"
-Description: ${site.description}
-URL: ${site.url}
-Posts: ${site.posts.length} | Pages: ${site.pages.length} | Categories: ${site.categories.length} | Tags: ${site.tags.length}
+## Site Info
+- Title: "${site.title}"
+- Description: "${site.description}"
+- URL: ${site.url}
+- Homepage type: ${site.frontPageId > 0 ? `Static page (id=${site.frontPageId})` : 'Blog listing'}
+- Language: ${site.language}
 
-Sample Posts:
-${postSamples}${site.posts.length > 8 ? `\n... and ${site.posts.length - 8} more` : ''}
+## Stats
+- ${site.posts.length} blog posts | ${site.pages.length} pages | ${site.categories.length} categories | ${site.customPostTypes.length} custom post items
 
-Pages:
-${pageSamples || '(none)'}
+## Navigation Menus
+${navDesc}
 
-Categories: ${catList || '(none)'}
+## All Pages (these all need React routes)
+${pageDesc}
 
-Generate these exact files:
+## Custom Post Types
+${cptDesc}
 
-1. db/schema.sql — PostgreSQL tables: posts (id serial PK, wp_id int, title text, slug text UNIQUE, content text, excerpt text, author text, date timestamptz, featured_image text, status text), pages (same structure), categories (id serial PK, wp_id int, name text, slug text UNIQUE, description text), tags (same), post_categories (post_id, category_id), post_tags (post_id, tag_id)
+## Categories
+${site.categories.map(c => `${c.name} (${c.count} posts)`).join(', ')}
 
-2. db/seed.sql — INSERT categories and tags from the parsed data (all ${site.categories.length} categories)
+Generate these files:
 
-3. scripts/import-content.js — Node.js script that reads data/content.json and bulk-inserts posts/pages/associations using pg. Run with: DATABASE_URL=... node scripts/import-content.js
+**Database layer:**
+1. db/schema.sql — tables: posts (id,wp_id,slug UNIQUE,title,content,excerpt,author,date,featured_image,post_type,parent_id,menu_order), pages (same), categories, tags, post_categories, post_tags, custom_items (id,wp_id,slug,title,content,post_type,featured_image)
 
-4. data/content.json — Array of first 5 posts with structure matching the insert script:
-${sampleContent}
+2. db/seed.sql — INSERT all ${site.categories.length} categories and all ${site.tags.length} tags
 
-5. server/db.js — pg Pool using DATABASE_URL env var
+3. data/pages.json — ALL ${site.pages.length} pages with full content:
+${pageDataSample}
 
-6. server/index.js — Express app (port process.env.PORT||3001), CORS, json(), mounts /api/posts /api/pages /api/categories routes, serves client/dist in production
+4. data/posts.json — first 10 of ${site.posts.length} posts:
+${postDataSample}
 
-7. server/routes/posts.js — GET /api/posts?page=1&limit=10&category=slug returns {posts,total,pages}; GET /api/posts/:slug returns single post with categories+tags
+5. scripts/import-content.js — reads data/pages.json + data/posts.json, bulk inserts into PostgreSQL. Run: DATABASE_URL=... node scripts/import-content.js
 
-8. server/routes/pages.js — GET /api/pages returns all; GET /api/pages/:slug returns single
+**Server:**
+6. server/db.js — pg Pool from DATABASE_URL
+7. server/index.js — Express, CORS, JSON, mounts all routes, serves client/dist in production
+8. server/routes/pages.js — GET /api/pages (all), GET /api/pages/:slug (single by slug)
+9. server/routes/posts.js — GET /api/posts?page&limit&category, GET /api/posts/:slug
+10. server/routes/categories.js — GET /api/categories with counts
+11. server/routes/navigation.js — GET /api/navigation returns the menu structure as JSON (hard-code the menu from the data above)
 
-9. server/routes/categories.js — GET /api/categories returns all with post counts
-
-10. package.json (root) — name: "${site.title.toLowerCase().replace(/\s+/g, '-')}-app", scripts: { "install:all": "npm i && cd client && npm i", "dev": "concurrently \\"npm run server\\" \\"npm run client\\"", "server": "node server/index.js", "client": "cd client && npm run dev", "build": "cd client && npm run build", "start": "NODE_ENV=production node server/index.js" }, dependencies: express cors pg dotenv concurrently
-
-11. .env.example — DATABASE_URL=postgresql://user:password@localhost:5432/dbname\nPORT=3001
-
-12. client/package.json — name: client, scripts dev/build/preview using vite, deps: react react-dom react-router-dom axios, devDeps: @vitejs/plugin-react vite tailwindcss @tailwindcss/typography postcss autoprefixer
-
+**Client:**
+12. client/package.json — React + Vite + react-router-dom + axios + @tailwindcss/typography
 13. client/vite.config.js — proxy /api → http://localhost:3001
+14. client/tailwind.config.js — content globs, @tailwindcss/typography plugin
+15. client/postcss.config.js
+16. client/index.html — title "${site.title}"
+17. client/src/main.jsx — ReactDOM + BrowserRouter + App
+18. client/src/api.js — axios instance, exports: getPage(slug), getPages(), getPosts(page,cat), getPost(slug), getCategories(), getNavigation()
 
-14. client/tailwind.config.js — content: ['./index.html','./src/**/*.{js,jsx}'], plugins: [@tailwindcss/typography]
+19. client/src/components/Header.jsx — Site title "${site.title}", navigation using getNavigation() API result. Render the EXACT menu structure from the data: ${site.menus[0]?.items.slice(0, 8).map(i => `"${i.title}"`).join(', ') || 'top-level pages'}. Support dropdown for items with children. Mobile hamburger menu.
 
-15. client/postcss.config.js — tailwindcss, autoprefixer
+20. client/src/components/Footer.jsx — Site title, description "${site.description}", copyright ${new Date().getFullYear()}. Include footer nav links from last menu or page list.
 
-16. client/index.html — standard Vite HTML shell, title "${site.title}"
+21. client/src/App.jsx — react-router-dom Routes with ALL the following routes:
+    - / → Home
+${site.pages.map(p => `    - /${p.slug} → Page`).join('\n')}
+    - /blog → BlogListing (if there are posts)
+    - /blog/:slug → SinglePost
+    - /category/:slug → CategoryPage
+    Also wrap all routes in Header + Footer layout.
 
-17. client/src/main.jsx — ReactDOM.createRoot with BrowserRouter wrapping App
+22. client/src/pages/Home.jsx — ${site.frontPageId > 0
+    ? `Static homepage. Render the content of the page with id=${site.frontPageId} fetched from /api/pages/${site.pages.find(p => p.id === site.frontPageId)?.slug || 'home'}. Display featured image if present. Render HTML content in a prose div.`
+    : `Blog-style homepage showing latest posts grid (3 cols), categories sidebar, hero with site title and description.`}
 
-18. client/src/App.jsx — react-router-dom Routes: / → Home, /post/:slug → Post, /page/:slug → Page, /category/:slug → Category, wraps in Header+Footer layout div
+${site.pages.map(p => `23+. client/src/pages/${p.slug.replace(/-/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_page.jsx — Fetch /api/pages/${p.slug}, render: page title as h1, featured image if present, full HTML content in <div className="prose max-w-none" dangerouslySetInnerHTML={{__html: page.content}} />. Show loading skeleton while fetching.`).join('\n')}
 
-19. client/src/api.js — axios instance pointing to /api, exports getPosts(page,category), getPost(slug), getPages(), getPage(slug), getCategories()
+Also:
+- client/src/pages/BlogListing.jsx — paginated blog grid with PostCard, category filter
+- client/src/pages/SinglePost.jsx — full post: title, date, author, categories, featured image, HTML content in prose div
+- client/src/pages/CategoryPage.jsx — filtered posts by category slug from URL
+- client/src/components/PostCard.jsx — card: featured image, title linked to /blog/:slug, excerpt (strip HTML), date, category tags
+- client/src/components/Pagination.jsx — prev/next + page numbers
+- client/src/index.css — @tailwind directives, body font styling, .prose img { max-width:100%; border-radius:0.5rem; } .prose a { color: #3b82f6; }
 
-20. client/src/components/Header.jsx — site title "${site.title}" as home link, nav links for top 6 categories, responsive hamburger menu
+**Root:**
+- package.json (root) — scripts: install:all, dev (concurrently server + client), build, start
+- .env.example
+- README.md — full setup: npm run install:all, create DB, schema.sql, seed.sql, import-content.js, npm run dev
 
-21. client/src/components/Footer.jsx — site description, copyright ${new Date().getFullYear()}, ${site.title}
+IMPORTANT RULES:
+1. Every page listed above MUST have its own React component with a real route
+2. Navigation must reflect the ACTUAL menu structure from the WordPress data, not a generic placeholder
+3. Page content is fetched from the API and rendered via dangerouslySetInnerHTML — this preserves all HTML formatting, images, embeds from the original WP content
+4. Images from the original site are referenced by their original URLs (they remain hosted on the WP server)
+5. The design should be clean, modern Tailwind — not a WP theme copy, but a professional modern conversion
 
-22. client/src/components/PostCard.jsx — card with featured image (if present), title linked to /post/:slug, excerpt (strip HTML tags), date formatted, category badges linked to /category/:slug, author
-
-23. client/src/components/Pagination.jsx — prev/next buttons + page numbers, takes {page, totalPages, onPageChange}
-
-24. client/src/pages/Home.jsx — fetches getPosts on mount and page change, grid of PostCard, Pagination, loading skeleton
-
-25. client/src/pages/Post.jsx — fetches getPost(slug), renders title, meta (date/author/cats), full content in prose div with dangerouslySetInnerHTML, featured image header
-
-26. client/src/pages/Page.jsx — fetches getPage(slug), renders title + content
-
-27. client/src/pages/Category.jsx — fetches getPosts with category filter from URL param, shows category title + PostCard grid + Pagination
-
-28. client/src/index.css — @tailwind base/components/utilities, body font-sans bg-gray-50 text-gray-900, .prose img max-w-full rounded, .prose a text-blue-600
-
-29. README.md — step by step: clone, npm run install:all, create postgres DB, psql < db/schema.sql, psql < db/seed.sql, cp .env.example .env (edit), DATABASE_URL=... node scripts/import-content.js, npm run dev → localhost:3001 API + localhost:5173 UI
-
-Return ONLY a JSON array of objects with keys: path (string), content (string), language (string). No markdown, no preamble.`
+Return ONLY a JSON array: [{"path":"...","content":"...","language":"js|jsx|sql|json|css|md"}]`
 
   const { text } = await routedGenerate(
     [{ role: 'user', content: prompt }],
@@ -118,7 +158,6 @@ Return ONLY a JSON array of objects with keys: path (string), content (string), 
     'high'
   )
 
-  // Extract JSON array from response
   const match = text.match(/\[[\s\S]*\]/)
   if (!match) throw new Error('LLM did not return a valid JSON array')
 
