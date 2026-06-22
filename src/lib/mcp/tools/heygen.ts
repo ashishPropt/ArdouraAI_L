@@ -28,7 +28,7 @@ export async function executeHeyGen(
 
   switch (action) {
     case 'generate_video': {
-      const p = params as GenerateVideoParams
+      const p = params as unknown as GenerateVideoParams
       const res = await client.post('/video/generate', {
         video_inputs: [{
           character: {
@@ -52,7 +52,7 @@ export async function executeHeyGen(
     }
 
     case 'check_video_status': {
-      const p = params as CheckStatusParams
+      const p = params as unknown as CheckStatusParams
       const res = await client.get(`/video/${p.videoId}`)
       const v = res.data.data
       return {
