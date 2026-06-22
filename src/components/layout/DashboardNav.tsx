@@ -57,7 +57,7 @@ export function DashboardNav({ user }: Props) {
       {/* Nav links */}
       <nav className="flex-1 px-3 space-y-1">
         {[
-          { href: '/dashboard',      icon: LayoutGrid,    label: 'Projects' },
+          { href: '/',               icon: LayoutGrid,    label: 'Projects' },
           { href: '/integrations',   icon: Plug,          label: 'Integrations' },
           { href: '/rules',          icon: Zap,           label: 'Automation Rules' },
           { href: '/incidents',      icon: AlertTriangle, label: 'Incidents' },
