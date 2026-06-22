@@ -34,6 +34,7 @@ try:
     run(client, f'cd {APP_DIR} && npm install kafkajs pg mysql2 mongodb @types/pg --legacy-peer-deps 2>&1', timeout=180)
     run(client, f'cd {APP_DIR} && npm install --legacy-peer-deps 2>&1', timeout=120)
     run(client, f'cd {APP_DIR} && npx prisma db push --accept-data-loss 2>&1', timeout=120)
+    run(client, f'rm -rf {APP_DIR}/.next 2>&1')
     run(client, f'cd {APP_DIR} && npm run build 2>&1', timeout=600)
     run(client, f'pm2 restart all 2>&1 || pm2 start {APP_DIR}/ecosystem.config.js 2>&1')
     run(client, 'pm2 status')
