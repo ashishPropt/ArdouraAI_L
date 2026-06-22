@@ -22,11 +22,12 @@ interface Props {
 export function ChatPanel({ messages, onSend, disabled, projectName }: Props) {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = messagesRef.current
+    if (el) el.scrollTop = el.scrollHeight
   }, [messages])
 
   async function handleSend() {
@@ -54,7 +55,7 @@ export function ChatPanel({ messages, onSend, disabled, projectName }: Props) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={messagesRef} className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center pb-8">
             <div className="w-12 h-12 bg-ardoura-800 rounded-2xl flex items-center justify-center mb-4">
@@ -125,7 +126,6 @@ export function ChatPanel({ messages, onSend, disabled, projectName }: Props) {
             </div>
           )
         })}
-        <div ref={bottomRef} />
       </div>
 
       {/* Input */}
