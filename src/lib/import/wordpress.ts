@@ -136,19 +136,39 @@ export function parseWXR(xmlContent: string): WPSite {
 }
 
 export async function fetchFromWPAPI(siteUrl: string): Promise<WPSite> {
-  const base = siteUrl.replace(/\/$/, '').replace(/\/wp-json(\/.*)?$/, '')
-  const api = `${base}/wp-json/wp/v2`
+  // Normalise: strip trailing slash and /wp-json path, then ensure protocol
+  let base = siteUrl.trim().replace(/\/$/, '').replace(/\/wp-json(\/.*)?$/, '')
+  if (!/^https?:\/\//i.test(base)) base = `https://${base}`
+
+  // Try https first, fall back to http if connection refused / cert error
+  let api = `${base}/wp-json/wp/v2`
+  let testRes = await axios.get(`${base}/wp-json`, { timeout: 10000 }).catch(async (err) => {
+    if (base.startsWith('https://')) {
+      const httpBase = base.replace('https://', 'http://')
+      return axios.get(`${httpBase}/wp-json`, { timeout: 10000 }).then(r => {
+        base = httpBase
+        api = `${base}/wp-json/wp/v2`
+        return r
+      })
+    }
+    throw err
+  }).catch(() => null)
 
   const [postsRes, pagesRes, catsRes, tagsRes, siteRes] = await Promise.allSettled([
-    axios.get(`${api}/posts?per_page=100&_embed=1&status=publish`, { timeout: 15000 }),
-    axios.get(`${api}/pages?per_page=100&_embed=1&status=publish`, { timeout: 15000 }),
-    axios.get(`${api}/categories?per_page=100`, { timeout: 15000 }),
-    axios.get(`${api}/tags?per_page=100`, { timeout: 15000 }),
-    axios.get(`${base}/wp-json`, { timeout: 15000 }),
+    axios.get(`${api}/posts?per_page=100&_embed=1&status=publish`, { timeout: 20000 }),
+    axios.get(`${api}/pages?per_page=100&_embed=1&status=publish`, { timeout: 20000 }),
+    axios.get(`${api}/categories?per_page=100`, { timeout: 20000 }),
+    axios.get(`${api}/tags?per_page=100`, { timeout: 20000 }),
+    testRes ? Promise.resolve(testRes) : axios.get(`${base}/wp-json`, { timeout: 10000 }),
   ])
 
   if (postsRes.status === 'rejected' && pagesRes.status === 'rejected') {
-    throw new Error(`Cannot reach WordPress REST API at ${base}/wp-json/wp/v2 — ensure the site has the REST API enabled`)
+    const reason = (postsRes.reason as any)?.message || 'connection failed'
+    throw new Error(
+      `Cannot reach the WordPress REST API at ${base}/wp-json/wp/v2 (${reason}). ` +
+      `Make sure: 1) the URL is correct, 2) the site is publicly accessible, ` +
+      `3) the WordPress REST API is not disabled by a security plugin.`
+    )
   }
 
   const siteInfo = siteRes.status === 'fulfilled' ? siteRes.value.data : {}
