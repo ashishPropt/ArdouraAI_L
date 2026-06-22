@@ -4,7 +4,17 @@ import { useState, useCallback } from 'react'
 import { ChevronRight, File, Folder, Edit3, Copy, Check, X, Loader2 } from 'lucide-react'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { detectLanguage } from '@/lib/codegen/generator'
+function detectLanguage(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase()
+  const map: Record<string, string> = {
+    ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
+    py: 'python', rb: 'ruby', go: 'go', rs: 'rust', java: 'java',
+    css: 'css', scss: 'scss', html: 'html', json: 'json',
+    md: 'markdown', sql: 'sql', sh: 'bash', env: 'bash',
+    yml: 'yaml', yaml: 'yaml', toml: 'toml', prisma: 'prisma',
+  }
+  return map[ext || ''] || 'text'
+}
 
 interface ProjectFile {
   id: string
