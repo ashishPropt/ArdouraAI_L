@@ -136,7 +136,7 @@ export function parseWXR(xmlContent: string): WPSite {
 }
 
 export async function fetchFromWPAPI(siteUrl: string): Promise<WPSite> {
-  const base = siteUrl.replace(/\/$/, '')
+  const base = siteUrl.replace(/\/$/, '').replace(/\/wp-json(\/.*)?$/, '')
   const api = `${base}/wp-json/wp/v2`
 
   const [postsRes, pagesRes, catsRes, tagsRes, siteRes] = await Promise.allSettled([

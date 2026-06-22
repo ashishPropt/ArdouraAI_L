@@ -308,11 +308,11 @@ export default function ImportPage() {
                 value={url}
                 onChange={e => setUrl(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && url && handlePreview()}
-                placeholder="https://yourwordpresssite.com"
+                placeholder="https://yourwordpresssite.com or .../wp-json"
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-ardoura-500 text-sm"
                 disabled={step === 'previewing'}
               />
-              <p className="text-xs text-slate-500 mt-1.5">The site must have the WordPress REST API enabled (default on all modern WP installs)</p>
+              <p className="text-xs text-slate-500 mt-1.5">Enter your site domain or paste the full <code className="text-slate-400">domain/wp-json</code> URL — both work</p>
             </div>
           ) : (
             <div>
