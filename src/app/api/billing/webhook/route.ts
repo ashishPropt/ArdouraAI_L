@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
 
-  const obj = event.data.object
+  const obj = event.data.object as Record<string, any>
 
   switch (event.type) {
     case 'customer.subscription.created':
