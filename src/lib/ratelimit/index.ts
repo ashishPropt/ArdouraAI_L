@@ -38,9 +38,9 @@ export function rateLimit(
 // Cleanup stale windows every 5 minutes
 setInterval(() => {
   const now = Date.now()
-  for (const [key, win] of windows.entries()) {
+  windows.forEach((win, key) => {
     if (now >= win.resetAt) windows.delete(key)
-  }
+  })
 }, 5 * 60 * 1000)
 
 export function getRateLimitHeaders(result: RateLimitResult, limit: number): Record<string, string> {
