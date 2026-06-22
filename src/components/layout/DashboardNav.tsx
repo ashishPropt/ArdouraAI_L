@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { Cpu, LayoutGrid, Settings, LogOut, Plus, Plug, Zap, Activity, AlertTriangle, Server, Coins, BarChart2, Globe, Workflow, ListChecks, Building2, Brain, KeyRound, CreditCard, Key } from 'lucide-react'
+import { Cpu, LayoutGrid, Settings, LogOut, Plus, Plug, Zap, Activity, AlertTriangle, Server, Coins, BarChart2, Globe, Workflow, ListChecks, Building2, Brain, KeyRound, CreditCard, Key, Megaphone } from 'lucide-react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -68,6 +68,7 @@ export function DashboardNav({ user }: Props) {
           { href: '/activity',       icon: ListChecks,    label: 'Activity' },
           { href: '/insights',       icon: Brain,         label: 'AI Insights' },
           { href: '/secrets',        icon: KeyRound,      label: 'Secrets' },
+          { href: '/marketing',      icon: Megaphone,     label: 'Marketing' },
           { href: '/api-keys',       icon: Key,           label: 'API Keys' },
           { href: '/billing',        icon: CreditCard,    label: 'Billing' },
           { href: '/organizations',  icon: Building2,     label: 'Organizations' },

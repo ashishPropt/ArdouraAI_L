@@ -34,8 +34,9 @@ model User {
   rules         Rule[]
   activityLogs  ActivityLog[]
   memberships   OrganizationMember[]
-  subscription  Subscription?
-  apiKeys       ApiKey[]
+  subscription   Subscription?
+  apiKeys        ApiKey[]
+  socialAccounts SocialAccount[]
 }
 
 model Account {
@@ -104,6 +105,11 @@ model Project {
   insights     Insight[]
   secrets      ProjectSecret[]
   environments ProjectEnvironment[]
+  marketingPosts   MarketingPost[]
+  marketingVideos  MarketingVideo[]
+  contentCalendars ContentCalendar[]
+  marketingMetrics MarketingMetric[]
+  socialAccounts   SocialAccount[]
 
   @@index([userId])
 }
@@ -435,6 +441,12 @@ enum IntegrationType {
   DATABASE
   VULTR
   EMAIL
+  HEYGEN
+  TWITTER
+  LINKEDIN
+  REDDIT
+  LOOPS
+  PRODUCTHUNT
 }
 
 // ─────────────────────────────────────────────
@@ -446,6 +458,7 @@ enum WorkflowTrigger {
   CRON
   WEBHOOK
   INCIDENT
+  APP_DEPLOYED
 }
 
 enum WorkflowStepType {
@@ -745,4 +758,128 @@ model ActivityLog {
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
   @@index([projectId, createdAt])
   @@index([userId, createdAt])
+}
+
+// ─────────────────────────────────────────────
+// PHASE 11 — MARKETING ENGINE
+// ─────────────────────────────────────────────
+
+enum MarketingPlatform {
+  TWITTER
+  LINKEDIN
+  INSTAGRAM
+  REDDIT
+  PRODUCTHUNT
+  EMAIL
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  FAILED
+}
+
+enum VideoType {
+  DEMO
+  FEATURE
+  LAUNCH
+}
+
+enum VideoStatus {
+  RENDERING
+  READY
+  FAILED
+}
+
+model SocialAccount {
+  id          String            @id @default(cuid())
+  userId      String
+  projectId   String?
+  platform    MarketingPlatform
+  handle      String?
+  accountId   String?
+  accessToken String            @db.Text  // AES-256 encrypted
+  refreshToken String?          @db.Text
+  expiresAt   DateTime?
+  createdAt   DateTime          @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  posts   MarketingPost[]
+  @@unique([userId, platform])
+  @@index([userId])
+}
+
+model MarketingPost {
+  id              String            @id @default(cuid())
+  projectId       String
+  socialAccountId String?
+  platform        MarketingPlatform
+  content         String            @db.Text
+  imageUrl        String?
+  videoUrl        String?
+  scheduledAt     DateTime?
+  publishedAt     DateTime?
+  status          PostStatus        @default(DRAFT)
+  externalId      String?           // platform post ID after publishing
+  metrics         Json              @default("{}")  // impressions, clicks, likes, shares
+  utmSource       String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount? @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+  calendarId    String?
+  calendar      ContentCalendar? @relation(fields: [calendarId], references: [id], onDelete: SetNull)
+  @@index([projectId, status])
+  @@index([scheduledAt])
+}
+
+model MarketingVideo {
+  id            String      @id @default(cuid())
+  projectId     String
+  type          VideoType   @default(DEMO)
+  title         String
+  script        String      @db.Text
+  heygenVideoId String?
+  videoUrl      String?
+  thumbnailUrl  String?
+  status        VideoStatus @default(RENDERING)
+  durationSecs  Int?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@index([projectId])
+}
+
+model ContentCalendar {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  posts   MarketingPost[]
+  @@index([projectId])
+}
+
+model MarketingMetric {
+  id          String   @id @default(cuid())
+  projectId   String
+  date        DateTime @db.Date
+  platform    MarketingPlatform
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
+  signups     Int      @default(0)
+  spend       Float    @default(0)
+  createdAt   DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  @@unique([projectId, date, platform])
+  @@index([projectId, date])
 }
