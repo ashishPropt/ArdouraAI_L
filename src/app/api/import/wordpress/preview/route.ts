@@ -22,7 +22,9 @@ export async function POST(req: NextRequest) {
       site = await fetchFromWPAPI(body.url)
     }
 
-    const customTypeNames = [...new Set(site.customPostTypes.map(p => p.postType))]
+    const customTypeSet = new Set(site.customPostTypes.map(p => p.postType))
+    const customTypeNames: string[] = []
+    customTypeSet.forEach(t => customTypeNames.push(t))
 
     return NextResponse.json({
       title: site.title,
