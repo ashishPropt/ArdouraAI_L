@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useSearchParams } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, ArrowLeft } from 'lucide-react'
 
 export default function ResetPasswordPage() {
