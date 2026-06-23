@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import bcrypt from 'bcryptjs'
+import { SignJWT } from 'jose'
+
+const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'fallback-secret-key')
 
 export async function POST(req: NextRequest) {
   try {
@@ -30,19 +33,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
-    // Create a simple JWT-like token manually
-    const tokenData = Buffer.from(JSON.stringify({
+    // Create a proper JWT using jose library (same as NextAuth)
+    const now = Math.floor(Date.now() / 1000)
+    const token = await new SignJWT({
       sub: user.id,
       email: user.email,
       name: user.name,
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60),
-    })).toString('base64')
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt(now)
+      .setExpirationTime(now + 30 * 24 * 60 * 60)
+      .sign(secret)
 
     const response = NextResponse.json({ success: true, user: { id: user.id, email, name: user.name } })
 
-    // Set the session cookie - same name NextAuth uses
-    response.cookies.set('authjs.session-token', tokenData, {
+    // Set the session cookie - same name and format NextAuth uses
+    response.cookies.set('authjs.session-token', token, {
       httpOnly: true,
       secure: false,
       sameSite: 'lax',
