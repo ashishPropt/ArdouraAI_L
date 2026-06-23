@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db/prisma'
 
 export const authConfig: NextAuthConfig = {
+  skipCSRFCheck: () => true,
   providers: [
     Credentials({
       credentials: {
