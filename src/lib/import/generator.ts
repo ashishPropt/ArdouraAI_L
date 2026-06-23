@@ -29,8 +29,11 @@ export async function generateFromWordPress(
   }).join('\n')
 
   // Describe custom post types
+  const cptTypeSet = new Set(site.customPostTypes.map(p => p.postType))
+  const uniqueCptTypes: string[] = []
+  cptTypeSet.forEach(t => uniqueCptTypes.push(t))
   const cptDesc = site.customPostTypes.length > 0
-    ? [...new Set(site.customPostTypes.map(p => p.postType))].map(type => {
+    ? uniqueCptTypes.map(type => {
         const items = site.customPostTypes.filter(p => p.postType === type)
         return `  Post type "${type}": ${items.length} items — ${items.slice(0, 5).map(i => `"${i.title}"`).join(', ')}${items.length > 5 ? '...' : ''}`
       }).join('\n')
