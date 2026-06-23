@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Cpu, Loader2 } from 'lucide-react'
@@ -18,13 +17,24 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
-    const res = await signIn('credentials', { email, password, redirect: false })
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
 
-    if (res?.error) {
-      setError('Invalid email or password')
-      setLoading(false)
-    } else {
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error || 'Login failed')
+        setLoading(false)
+        return
+      }
+
       router.push('/projects')
+    } catch (err) {
+      setError('Network error')
+      setLoading(false)
     }
   }
 
