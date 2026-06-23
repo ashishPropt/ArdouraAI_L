@@ -62,7 +62,14 @@ export function ProjectWorkspace({ project: initial }: { project: Project }) {
       body: JSON.stringify({ projectId: project.id, message: text }),
     })
 
-    if (!res.ok || !res.body) return
+    if (!res.ok || !res.body) {
+      setMessages((prev) => {
+        const msgs = [...prev]
+        msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], content: '❌ Failed to reach the AI. Please try again.' }
+        return msgs
+      })
+      return
+    }
 
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
