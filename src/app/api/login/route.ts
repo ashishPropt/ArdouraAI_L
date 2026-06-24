@@ -3,7 +3,10 @@ import { prisma } from '@/lib/db/prisma'
 import bcrypt from 'bcryptjs'
 import { EncryptJWT } from 'jose'
 
-const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'fallback-secret-key-minimum-32-chars-long!')
+// Use the first 32 bytes of NEXTAUTH_SECRET for A128CBC-HS256 (256-bit key requirement)
+const secretStr = process.env.NEXTAUTH_SECRET || 'fallback-secret-key-minimum-32-chars-long!'
+const secretBytes = new TextEncoder().encode(secretStr)
+const secret = secretBytes.slice(0, 32)
 
 export async function POST(req: NextRequest) {
   try {
