@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db/prisma'
 import bcrypt from 'bcryptjs'
-import { SignJWT } from 'jose'
+import { EncryptJWT } from 'jose'
 
-const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'fallback-secret-key')
+const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'fallback-secret-key-minimum-32-chars-long!')
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,17 +33,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
-    // Create a proper JWT using jose library (same as NextAuth)
+    // Create encrypted JWT using NextAuth's EncryptJWT (compatible with NextAuth's decryption)
     const now = Math.floor(Date.now() / 1000)
-    const token = await new SignJWT({
+    const token = await new EncryptJWT({
       sub: user.id,
       email: user.email,
       name: user.name,
     })
-      .setProtectedHeader({ alg: 'HS256' })
+      .setProtectedHeader({ alg: 'dir', enc: 'A128CBC-HS256' })
       .setIssuedAt(now)
       .setExpirationTime(now + 30 * 24 * 60 * 60)
-      .sign(secret)
+      .encrypt(secret)
 
     const response = NextResponse.json({ success: true, user: { id: user.id, email, name: user.name } })
 
