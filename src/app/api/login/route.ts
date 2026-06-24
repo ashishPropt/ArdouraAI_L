@@ -39,9 +39,11 @@ export async function POST(req: NextRequest) {
     // Create encrypted JWT using NextAuth's EncryptJWT (compatible with NextAuth's decryption)
     const now = Math.floor(Date.now() / 1000)
     const token = await new EncryptJWT({
+      id: user.id,
       sub: user.id,
       email: user.email,
       name: user.name,
+      image: user.image,
     })
       .setProtectedHeader({ alg: 'dir', enc: 'A128CBC-HS256' })
       .setIssuedAt(now)
